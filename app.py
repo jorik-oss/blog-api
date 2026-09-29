@@ -19,10 +19,17 @@ def get_authors():
 @app.route('/posts', methods=['GET'])
 def get_posts():
     conn = get_db_connection()
-    rows = conn.execute('SELECT * FROM posts').fetchall()
+    
+    author_id = request.args.get('author_id')
+    
+    if author_id:
+        posts = conn.execute('SELECT * FROM posts WHERE author_id = ?', (author_id,)).fetchall()
+    else:
+        posts = conn.execute('SELECT * FROM posts').fetchall()
+        
     conn.close()
     
-    return jsonify([dict(row) for row in rows])
+    return jsonify([dict(post) for post in posts])
 
 @app.route('/posts/<int:id>', methods=['GET'])
 def get_post(id):
@@ -90,6 +97,90 @@ def create_post():
 
     return jsonify(dict(post)), 201
 
+@app.route("/authors/<int:id>/posts", methods=["GET"])
+def get_author_posts(id):
+    conn = get_db_connection()
 
+    author = conn.execute(
+        "SELECT * FROM authors WHERE id = ?",
+        (id,)
+    ).fetchone()
+
+    if author is None:
+        conn.close()
+        return jsonify({"error": "Author not found"}), 404
+
+    posts = conn.execute(
+        "SELECT * FROM posts WHERE author_id = ?",
+        (id,)
+    ).fetchall()
+
+    conn.close()
+
+    return jsonify([dict(post) for post in posts])
+
+
+@app.route("/posts/<int:id>", methods=["DELETE"])
+def delete_post(id):
+    conn = get_db_connection()
+
+    cursor = conn.execute(
+        "DELETE FROM posts WHERE id = ?",
+        (id,)
+    )
+
+    if cursor.rowcount == 0:
+        conn.close()
+        return jsonify({"error": "Post not found"}), 404
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Post deleted"})
+    
+
+@app.route("/authors/<int:id>", methods=["GET"])
+def get_author(id):
+    conn = get_db_connection()
+
+    author = conn.execute(
+        "SELECT * FROM authors WHERE id = ?",
+        (id,)
+    ).fetchone()
+
+    if author is None:
+        conn.close()
+        return jsonify({"error": "Author not found"}), 404
+
+    posts = conn.execute(
+        "SELECT id, title FROM posts WHERE author_id = ?",
+        (id,)
+    ).fetchall()
+
+    conn.close()
+
+    author_data = dict(author)
+    author_data["posts"] = [dict(post) for post in posts]
+
+    return jsonify(author_data)
+
+
+@app.route("/posts/popular", methods=["GET"])
+def get_popular_posts():
+    conn = get_db_connection()
+
+    posts = conn.execute(
+        """
+        SELECT * FROM posts
+        ORDER BY views DESC
+        LIMIT 3
+        """
+    ).fetchall()
+
+    conn.close()
+
+    return jsonify([dict(post) for post in posts])
+    
+    
 if __name__ == '__main__':
     app.run(debug=True)
