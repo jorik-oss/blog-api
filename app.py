@@ -34,19 +34,48 @@ def get_posts():
 @app.route('/posts/<int:id>', methods=['GET'])
 def get_post(id):
     conn = get_db_connection()
-    post = conn.execute('SELECT * FROM posts WHERE id = ?', (id,)).fetchone()
+    
+    conn.execute(
+        "UPDATE posts SET views = views + 1 WHERE id = ?",(id,)
+    )
+    
+    conn.commit()
+    
+    post = conn.execute(
+        """
+        SELECT
+            posts.id,
+            posts.title,
+            posts.content,
+            posts.views,
+            authors.id AS author_id,
+            authors.name AS author_name,
+            authors.bio AS author_bio
+        FROM posts
+        JOIN authors ON posts.author_id = authors.id
+        WHERE posts.id = ?
+        """, (id,)
+    ).fetchone()
     
     if post is None:
         conn.close()
-        return jsonify({'error': 'Post not found'}), 404
+        return jsonify({"error": "Post not found"}), 404
     
-    conn.execute('UPDATE posts SET views = views + 1 WHERE id = ?', (id,))
-    conn.commit()
-    
-    post = conn.execute('SELECT * FROM posts WHERE id = ?', (id,)).fetchone()
     conn.close()
     
-    return jsonify(dict(post))
+    return jsonify({
+        "id": post["id"],
+        "title": post["title"],
+        "content": post["content"],
+        "views": post["views"],
+        "author": {
+            "id": post["author_id"],
+            "name": post["author_name"],
+            "bio": post["author_bio"]
+        }
+    })
+    
+    
 
     
 @app.route("/posts", methods=["POST"])
